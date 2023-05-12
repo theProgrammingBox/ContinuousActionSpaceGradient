@@ -5,47 +5,42 @@
 
 int main()
 {
-	const uint32_t samples = 10;
+	const uint32_t samples = 256;
 	float actions[samples];
+	float err[samples];
 
 	olc::vf2d policy = { 0.0f, 1.0f };
-	olc::vf2d targetPolicy = { -100.0f, 100.0f };
+	olc::vf2d targetPolicy = { -10.0f, 1.0f };
 	olc::vf2d policyGrad;
 
 	std::random_device rd;
 	std::mt19937 gen(rd());
 	std::normal_distribution<> dis(0.0f, 1.0f);
 
-	while (true)
+	printf("Policy: %f %f\n", policy.x, policy.y);
+	for (int itr = 0; itr < 64; itr++)
 	{
-		float targetAction = targetPolicy.x + targetPolicy.y * dis(gen);
-
+		float avgErr = 0.0f;
 		for (uint32_t i = 0; i < samples; i++)
+		{
 			actions[i] = policy.x + policy.y * dis(gen);
+			err[i] = abs((targetPolicy.x + targetPolicy.y * dis(gen)) - actions[i]);
+			avgErr += err[i];
+		}
+		avgErr /= samples;
 
-		// sort actions by errors closest to 0
-		std::sort(actions, actions + samples, [targetAction](float a, float b) { return std::abs(targetAction - a) < std::abs(targetAction - b); });
-
-		for (uint32_t i = samples * 0.5f; i < samples; i++)
+		olc::vf2d policyAccuminator = { 0.0f, 0.0f };
+		for (uint32_t i = 0; i < samples; i++)
 		{
 			float tmp = 1.0f / policy.y;
 			policyGrad.x = (actions[i] - policy.x) * tmp * tmp;
 			policyGrad.y = policyGrad.x * policyGrad.x * policy.y - tmp;
-
-			policy -= policyGrad * 0.01f;
-			policy.y = std::max(0.2f, policy.y);
+			float logProb = 0.5f * policyGrad.y * policy.y + log(policy.y) + 1.4189385332046727f;
+			float advantage = avgErr - err[i];
+			policyAccuminator += advantage * policyGrad * logProb;
 		}
-
-		for (uint32_t i = samples * 0.5f; i--;)
-		{
-			float tmp = 1.0f / policy.y;
-			policyGrad.x = (actions[i] - policy.x) * tmp * tmp;
-			policyGrad.y = policyGrad.x * policyGrad.x * policy.y - tmp;
-
-			policy += policyGrad * 0.01f;
-			policy.y = std::max(0.2f, policy.y);
-		}
-
+		policy += policyAccuminator * 0.001f;
+		policy.y = std::max(0.1f, policy.y);
 		printf("Policy: %f %f\n", policy.x, policy.y);
 	}
 
