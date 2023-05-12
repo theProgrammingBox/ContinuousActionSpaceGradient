@@ -37,7 +37,8 @@ int main()
 			policyGrad.y = policyGrad.x * policyGrad.x * policy.y - tmp;
 			float logProb = 0.5f * policyGrad.y * policy.y + log(policy.y) + 1.4189385332046727f;
 			float advantage = avgErr - err[i];
-			policyAccuminator += advantage * policyGrad * logProb;
+			float normA = advantage > 0 ? log(avgErr - err[i] + 1) : -log(err[i] - avgErr + 1);
+			policyAccuminator += normA * policyGrad * logProb;
 		}
 		policy += policyAccuminator * 0.001f;
 		policy.y = std::max(0.1f, policy.y);
